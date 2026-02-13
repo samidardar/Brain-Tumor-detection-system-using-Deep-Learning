@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Pink Background */
+    --background: 350 100% 98%;
+    --foreground: 60 40% 10%;
+    /* Dark Olive/Black */
+
+    /* Card Background - White with slight pink tint */
+    --card: 0 0% 100%;
+    --card-foreground: 60 40% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 40% 10%;
+
+    /* Gold Primary */
+    --primary: 48 100% 50%;
+    --primary-foreground: 60 40% 10%;
+
+    /* Olive Secondary */
+    --secondary: 60 100% 25%;
+    --secondary-foreground: 48 100% 90%;
+    /* Light Gold text */
+
+    --muted: 350 20% 96%;
+    --muted-foreground: 60 20% 40%;
+
+    --accent: 350 60% 90%;
+    /* Pink Accent */
+    --accent-foreground: 60 40% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 350 30% 90%;
+    --input: 350 30% 90%;
+    --ring: 48 100% 50%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 60 40% 5%;
+    /* Very Dark Olive */
+    --foreground: 48 20% 90%;
+
+    --card: 60 40% 5%;
+    --card-foreground: 48 20% 90%;
+
+    --popover: 60 40% 5%;
+    --popover-foreground: 48 20% 90%;
+
+    --primary: 48 100% 50%;
+    --primary-foreground: 60 40% 10%;
+
+    --secondary: 60 100% 25%;
+    --secondary-foreground: 48 100% 90%;
+
+    --muted: 60 20% 15%;
+    --muted-foreground: 48 20% 70%;
+
+    --accent: 60 40% 15%;
+    --accent-foreground: 48 20% 90%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 60 20% 20%;
+    --input: 60 20% 20%;
+    --ring: 48 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

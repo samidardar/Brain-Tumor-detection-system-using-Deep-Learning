@@ -1,0 +1,227 @@
+# ============================================================================
+# Diabetic Retinopathy Detection - Configuration
+# ============================================================================
+# This file centralizes all hyperparameters and settings for the project.
+# Modify values here instead of hardcoding them in source files.
+# ============================================================================
+
+# --- Project Metadata ---
+project:
+  name: "Diabetic Retinopathy Detection"
+  version: "1.0.0"
+  description: "AI-assisted screening for diabetic retinopathy from fundus images"
+  seed: 42  # Global random seed for reproducibility
+
+# --- Data Settings ---
+data:
+  # Paths (relative to project root)
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  labels_csv: "data/raw/train.csv"       # CSV with columns: id_code, diagnosis
+  test_csv: "data/raw/test.csv"
+
+  # Image settings
+  image_size: 512             # Target image size (512x512 recommended for medical)
+  image_format: "png"         # Image format in the dataset
+
+  # Dataset splitting
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  # Class mapping (APTOS 2019)
+  class_names:
+    - "No DR"
+    - "Mild"
+    - "Moderate"
+    - "Severe"
+    - "Proliferative DR"
+
+  # Binary mode: merge classes 1-4 into "DR Present"
+  binary_mode: false
+  binary_class_names:
+    - "No DR"
+    - "DR Present"
+
+  # Number of dataloader workers
+  num_workers: 4
+  pin_memory: true
+
+# --- Preprocessing ---
+preprocessing:
+  # Ben Graham's method for fundus preprocessing
+  ben_graham: true
+  ben_graham_sigma: 10
+
+  # Auto-crop black borders around fundus
+  auto_crop: true
+  crop_threshold: 10          # Pixel intensity threshold for border detection
+
+  # Quality filtering
+  quality_check: true
+  blur_threshold: 100.0       # Laplacian variance threshold for blur detection
+  dark_threshold: 30.0        # Mean intensity threshold for dark images
+
+# --- Data Augmentation (Albumentations) ---
+augmentation:
+  # Geometric transforms
+  horizontal_flip: true
+  vertical_flip: true
+  rotation_limit: 30          # degrees
+  shift_limit: 0.1
+  scale_limit: 0.15
+
+  # Color/intensity transforms
+  brightness_limit: 0.2
+  contrast_limit: 0.2
+  hue_shift_limit: 10
+  saturation_limit: 20
+
+  # Advanced transforms
+  elastic_transform: true
+  elastic_alpha: 120
+  elastic_sigma: 6.0
+  grid_distortion: true
+  optical_distortion: true
+
+  # Cutout / CoarseDropout
+  coarse_dropout: true
+  dropout_max_holes: 8
+  dropout_max_height: 32
+  dropout_max_width: 32
+
+  # Probability of applying each transform
+  transform_probability: 0.5
+
+# --- Class Imbalance Handling ---
+class_balance:
+  # Strategy: "weighted_sampling", "class_weights", or "oversampling"
+  strategy: "weighted_sampling"
+
+  # If using class_weights in loss function
+  auto_compute_weights: true   # Compute from training set distribution
+  manual_weights: null         # Or specify manually: [1.0, 2.0, 3.0, 5.0, 5.0]
+
+# --- Model Architecture ---
+model:
+  # Architecture: "efficientnet_b0", "efficientnet_b3", "resnet50"
+  architecture: "efficientnet_b3"
+
+  # Number of output classes (5 for multi-class, 2 for binary)
+  num_classes: 5
+
+  # ImageNet pretrained
+  pretrained: true
+
+  # Classification head
+  dropout: 0.4
+  hidden_dim: 512             # Hidden layer size in classifier head
+
+  # Progressive unfreezing
+  freeze_backbone: true       # Freeze backbone initially
+  unfreeze_after_epochs: 3    # Unfreeze after N epochs
+
+# --- Training ---
+training:
+  # Optimizer
+  optimizer: "adamw"           # "adam" or "adamw"
+  learning_rate: 0.0003        # 3e-4
+  weight_decay: 0.01           # L2 regularization (AdamW)
+  momentum: 0.9                # For SGD only
+
+  # Batch size
+  batch_size: 16               # Reduce if GPU OOM
+  gradient_accumulation_steps: 2  # Effective batch = batch_size * accumulation
+
+  # Epochs
+  max_epochs: 50
+  min_epochs: 10
+
+  # Learning rate scheduler
+  scheduler: "cosine"          # "cosine", "plateau", or "step"
+  # CosineAnnealingWarmRestarts
+  cosine_T_0: 10
+  cosine_T_mult: 2
+  cosine_eta_min: 0.000001
+  # ReduceLROnPlateau
+  plateau_factor: 0.5
+  plateau_patience: 3
+  plateau_min_lr: 0.000001
+
+  # Early stopping
+  early_stopping: true
+  patience: 7                  # Epochs without improvement
+  monitor: "val_recall"        # Metric to monitor: "val_loss", "val_recall", "val_auc"
+  mode: "max"                  # "min" for loss, "max" for recall/auc
+
+  # Mixed precision training (FP16)
+  mixed_precision: true
+
+  # Gradient clipping
+  gradient_clip_max_norm: 1.0
+
+# --- Logging & Checkpointing ---
+logging:
+  # MLflow settings
+  use_mlflow: true
+  mlflow_tracking_uri: "mlruns"
+  mlflow_experiment_name: "diabetic_retinopathy"
+
+  # Console logging
+  log_interval: 10             # Log every N batches
+  verbose: true
+
+  # Checkpointing
+  checkpoint_dir: "models"
+  save_best_only: true
+  save_metric: "val_recall"    # Save based on this metric
+
+  # TensorBoard
+  use_tensorboard: true
+  tensorboard_dir: "outputs/tensorboard"
+
+# --- Evaluation ---
+evaluation:
+  # Threshold for binary classification
+  binary_threshold: 0.5
+
+  # Optimal threshold search
+  optimize_threshold: true     # Search for threshold maximizing recall ≥ 95%
+
+  # Output directory for evaluation artifacts
+  output_dir: "outputs/evaluation"
+
+  # Generate detailed error analysis
+  error_analysis: true
+  num_error_examples: 20       # Number of FP/FN examples to visualize
+
+# --- Inference ---
+inference:
+  # Model path for inference
+  model_path: "models/best_model.pth"
+
+  # Device
+  device: "auto"               # "auto", "cuda", "cpu"
+
+  # Grad-CAM settings
+  gradcam:
+    enabled: true
+    target_layer: "auto"       # Auto-detect last conv layer
+    colormap: "jet"
+    alpha: 0.4                 # Overlay transparency
+
+  # Batch inference
+  batch_size: 32
+
+# --- API Settings ---
+api:
+  host: "0.0.0.0"
+  port: 8000
+  max_image_size_mb: 10
+  allowed_extensions:
+    - "jpg"
+    - "jpeg"
+    - "png"
+    - "tiff"
+  cors_origins:
+    - "*"
