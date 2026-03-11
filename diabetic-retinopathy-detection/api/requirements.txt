@@ -9,5 +9,5 @@ numpy>=1.24.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
-grad-cam>=1.4.8
+pytorch-grad-cam>=1.5.0
 pyyaml>=6.0.1

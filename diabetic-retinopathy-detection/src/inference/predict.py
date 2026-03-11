@@ -55,27 +55,18 @@ def load_model(
 
     # Extract model config from checkpoint
     config = checkpoint.get("config", {})
-    # Handle flat config (train_v2) or nested (config.yaml)
-    model_cfg = config.get("model", config) 
+    model_cfg = config.get("model", {})
 
     architecture = checkpoint.get("architecture", model_cfg.get("architecture", "efficientnet_b3"))
     num_classes = checkpoint.get("num_classes", model_cfg.get("num_classes", 5))
-    
-    # Robust hidden dim extraction
-    hidden_dim = model_cfg.get("hidden_dim", model_cfg.get("hidden", 512))
-    hidden_dim = int(hidden_dim)
-    
-    dropout = model_cfg.get("dropout", 0.4)
-
-    logger.info(f"Initializing model: arch={architecture}, hidden_dim={hidden_dim}, classes={num_classes}")
 
     # Reconstruct model
     model = RetinopathyModel(
         architecture=architecture,
         num_classes=num_classes,
         pretrained=False,  # We're loading weights
-        dropout=dropout,
-        hidden_dim=hidden_dim,
+        dropout=model_cfg.get("dropout", 0.4),
+        hidden_dim=model_cfg.get("hidden_dim", 512),
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)

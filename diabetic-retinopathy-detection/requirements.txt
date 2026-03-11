@@ -26,7 +26,7 @@ matplotlib>=3.7.0
 seaborn>=0.12.0
 
 # --- Grad-CAM / Interpretability ---
-grad-cam>=1.4.8         # Grad-CAM, Score-CAM, etc.
+pytorch-grad-cam>=1.5.0         # Grad-CAM, Score-CAM, etc.
 
 # --- Experiment Tracking ---
 mlflow>=2.8.0
