@@ -186,7 +186,9 @@ class RetinopathyModel(nn.Module):
         Returns the last convolutional layer of the backbone.
         """
         if "efficientnet" in self.architecture:
-            # Last block of EfficientNet
+            # Prefer conv_head (1x1 expansion) if present, else last block
+            if hasattr(self.backbone, "conv_head") and self.backbone.conv_head is not None:
+                return self.backbone.conv_head
             return self.backbone.blocks[-1]
         elif "resnet" in self.architecture:
             return self.backbone.layer4[-1]

@@ -81,8 +81,10 @@ async def lifespan(app: FastAPI):
         transform = get_val_transforms({"data": {"image_size": IMAGE_SIZE}})
         logger.info(f"Model loaded: {model_metadata['architecture']}")
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        raise RuntimeError(f"Model loading failed: {e}")
+        logger.error(f"Failed to load model: {e}", exc_info=True)
+        # Do not raise, allow app to start in degraded mode
+        model = None
+        model_metadata = {}
 
     # Initialize Grad-CAM
     if ENABLE_GRADCAM:
@@ -133,6 +135,7 @@ class PredictionResponse(BaseModel):
     confidence: float
     probabilities: dict
     inference_time_ms: float
+    referable: bool
     gradcam_base64: Optional[str] = None
     disclaimer: str = (
         "This is a screening aid. Not a medical diagnosis. "
@@ -199,12 +202,17 @@ def generate_gradcam_base64(image_rgb: np.ndarray) -> Optional[str]:
         return None
     try:
         overlay, _, _, _ = gradcam_visualizer.generate_heatmap(image_rgb, transform)
+        
+        # Ensure uint8
+        if overlay.dtype != np.uint8:
+            overlay = (overlay * 255).clip(0, 255).astype(np.uint8)
+            
         # Convert to base64
         overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
         _, buffer = cv2.imencode(".png", overlay_bgr)
         return base64.b64encode(buffer).decode("utf-8")
     except Exception as e:
-        logger.warning(f"Grad-CAM generation failed: {e}")
+        logger.error(f"Grad-CAM generation failed: {e}", exc_info=True)
         return None
 
 
@@ -222,62 +230,79 @@ async def predict(
     Returns the severity grade, confidence score, class probabilities,
     and optionally a Grad-CAM heatmap as base64-encoded PNG.
     """
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+    try:
+        if model is None:
+            raise HTTPException(status_code=503, detail="Model not loaded")
 
-    # Read image
-    image_bgr = await read_image(file)
-    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        # Read image
+        image_bgr = await read_image(file)
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-    # Preprocess
-    start_time = time.time()
-    transformed = transform(image=image_rgb)
-    input_tensor = transformed["image"].unsqueeze(0).to(device)
+        # Preprocess
+        start_time = time.time()
+        transformed = transform(image=image_rgb)
+        input_tensor = transformed["image"].unsqueeze(0).to(device)
 
-    # Inference
-    with torch.no_grad():
-        outputs = model(input_tensor)
-        probs = torch.softmax(outputs, dim=1)[0]
-        pred_class = outputs.argmax(dim=1).item()
-        confidence = probs[pred_class].item()
+        # Inference
+        with torch.no_grad():
+            outputs = model(input_tensor)
+            probs = torch.softmax(outputs, dim=1)[0]
+            pred_class = outputs.argmax(dim=1).item()
+        
+        # Custom Thresholding for Screening Sensitivity
+        if len(class_names) == 2:
+            threshold = 0.40
+            dr_prob = probs[1].item()
+            if dr_prob >= threshold:
+                pred_class = 1
+                confidence = dr_prob
+            else:
+                pred_class = 0
+                confidence = probs[0].item()
+        else:
+            confidence = probs[pred_class].item()
+        
+        # Determine referability
+        is_referable = False
+        if len(class_names) == 2:
+            is_referable = (pred_class == 1)
+        else:
+            is_referable = (pred_class >= 2)
 
-    inference_ms = (time.time() - start_time) * 1000
+        inference_ms = (time.time() - start_time) * 1000
 
-    # Grad-CAM
-    gradcam_b64 = None
-    if include_gradcam and ENABLE_GRADCAM:
-        gradcam_b64 = generate_gradcam_base64(image_rgb)
+        # Log probabilities for debugging
+        logger.info(f"Prediction: {class_names[pred_class]} (Class {pred_class})")
+        logger.info(f"Probabilities: {probs.tolist()}")
 
-    return PredictionResponse(
-        predicted_class=pred_class,
-        predicted_label=class_names[pred_class],
-        confidence=round(confidence, 4),
-        probabilities={
-            name: round(float(p), 4)
-            for name, p in zip(class_names, probs.cpu().numpy())
-        },
-        inference_time_ms=round(inference_ms, 1),
-        gradcam_base64=gradcam_b64,
-    )
+        # Grad-CAM
+        gradcam_b64 = None
+        if include_gradcam and ENABLE_GRADCAM:
+            gradcam_b64 = generate_gradcam_base64(image_rgb)
+
+        return PredictionResponse(
+            predicted_class=pred_class,
+            predicted_label=class_names[pred_class],
+            confidence=round(confidence, 4),
+            probabilities={
+                name: round(float(p), 4)
+                for name, p in zip(class_names, probs.cpu().numpy())
+            },
+            inference_time_ms=round(inference_ms, 1),
+            referable=is_referable,
+            gradcam_base64=gradcam_b64,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/health", response_model=HealthResponse, tags=["System"])
+@app.get("/health", tags=["System"])
 async def health_check():
-    """Check API health and model status."""
-    gpu_name = None
-    gpu_mem = None
-    if torch.cuda.is_available():
-        gpu_name = torch.cuda.get_device_name(0)
-        gpu_mem = round(torch.cuda.get_device_properties(0).total_mem / 1e9, 1)
-
-    return HealthResponse(
-        status="healthy" if model is not None else "degraded",
-        model_loaded=model is not None,
-        device=str(device),
-        gpu_name=gpu_name,
-        gpu_memory_gb=gpu_mem,
-        timestamp=datetime.now().isoformat(),
-    )
+    """Simple health check."""
+    return {"status": "ok", "timestamp": str(datetime.now())}
 
 
 @app.get("/model/info", response_model=ModelInfoResponse, tags=["System"])

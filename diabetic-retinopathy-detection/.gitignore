@@ -27,16 +27,14 @@ data/processed/*
 !data/processed/.gitkeep
 !data/README.md
 
-# Model checkpoints (large files)
+# Model checkpoints (large - use Git LFS or download separately)
 models/*.pth
 models/*.pt
 models/*.onnx
 !models/.gitkeep
 
-# Outputs
-outputs/
-mlruns/
-wandb/
+# Node modules (frontend)
+frontend/node_modules/
 
 # OS files
 .DS_Store
@@ -49,5 +47,17 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# Docker
-*.log
+# Logs (keep training logs for documentation)
+backend.log
+
+# Debug files
+debug_*.py
+test_debug.*
+synthetic_eye.*
+
+# MLflow / Wandb
+mlruns/
+wandb/
+
+# Keep outputs (training curves, evaluation plots) for the report
+# outputs/ -- NOT ignored, included for documentation
